@@ -17,6 +17,7 @@
 
 package net.floodlightcontroller.forwarding;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
@@ -1012,6 +1013,55 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
                     new Object[] { sw, m, fmb.build() });
         }
         boolean dampened = messageDamper.write(sw, fmb.build());
+        ///trama Ethernet
+        Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);;
+        ///IPv4
+        if(eth.getEtherType().equals(EthType.IPv4)) {
+            IPv4 ip = (IPv4) eth.getPayload();
+            ///TCP
+            if (ip.getProtocol().equals(IpProtocol.TCP)) {
+                TCP tcp = (TCP) ip.getPayload();
+                ///FLAG es SYN
+                if(tcp.getFlags() == 0x02 ){
+                    log.info("New TCP connection found, rejecting");
+
+                    IPacket tcpLayer = new TCP()
+                            .setDestinationPort(tcp.getSourcePort())
+                            .setSourcePort(tcp.getDestinationPort())
+                            .setSequence(tcp.getSequence()+1)
+                            .setAcknowledge(tcp.getSequence()+1)
+                            .setFlags((short) 0x14)
+                            .setWindowSize((short) 0)
+                            .setPayload(new Data(new byte[] {0x01}));
+                    IPacket ipLayer = new IPv4()
+                            .setDestinationAddress(ip.getSourceAddress())
+                            .setSourceAddress(ip.getDestinationAddress())
+                            .setTtl((byte) 128)
+                            .setPayload(tcpLayer);
+                    IPacket packet = new Ethernet()
+                            .setDestinationMACAddress(eth.getSourceMACAddress())
+                            .setSourceMACAddress(eth.getDestinationMACAddress())
+                            .setEtherType(eth.getEtherType())
+                            .setPayload(ipLayer);
+                    byte[] data = packet.serialize();
+                    ///PacketOut
+                    List<OFAction> actionList = new ArrayList<>();
+                    actionList.add(sw.getOFFactory().actions().output(inPort, Integer.MAX_VALUE));
+                    OFPacketOut.Builder po = sw.getOFFactory().buildPacketOut()
+                            .setData(data)
+                            .setActions(actionList)
+                            .setInPort(OFPort.CONTROLLER)
+                            .setBufferId(OFBufferId.NO_BUFFER);
+                    ///Enviamos el PacketOut
+                    if (log.isTraceEnabled()) {
+                        log.trace("Writing flood PacketOut switch={} packet-in={} packet-out={}",
+                                new Object[] {sw, pi, po.build()});
+                    }
+                    messageDamper.write(sw, po.build());
+
+                }
+            }
+        }
         log.debug("OFMessage dampened: {}", dampened);
     }
 

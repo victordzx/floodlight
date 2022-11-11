@@ -33,6 +33,7 @@ import net.floodlightcontroller.core.internal.RoleManager;
 import net.floodlightcontroller.core.internal.Controller.IUpdate;
 import net.floodlightcontroller.core.internal.Controller.ModuleLoaderState;
 import net.floodlightcontroller.core.FloodlightContextStore;
+import net.floodlightcontroller.core.internal.FloodlightProvider;
 
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFType;

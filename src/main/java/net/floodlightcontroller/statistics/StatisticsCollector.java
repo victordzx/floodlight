@@ -71,6 +71,9 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 	private static ScheduledFuture<?> flowStatsCollector;
 	private static ScheduledFuture<?> portDescCollector;
 
+	private static double portTxThreshold=100;
+	private static double portRxThreshold=100;
+
 	private static final long BITS_PER_BYTE = 8;
 	private static final long MILLIS_PER_SEC = 1000;
 
@@ -146,12 +149,23 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 							}
 							long speed = getSpeed(npt);
 							double timeDifSec = ((System.nanoTime() - spb.getStartTime_ns()) * 1.0 / 1000000) / MILLIS_PER_SEC;
-							portStats.put(npt, SwitchPortBandwidth.of(npt.getNodeId(), npt.getPortId(), 
+
+							double traficoRx =  (rxBytesCounted.getValue() * BITS_PER_BYTE) / timeDifSec;
+							double traficoTx =  (txBytesCounted.getValue() * BITS_PER_BYTE) / timeDifSec;
+							if (traficoRx>portRxThreshold)
+							{
+								log.warn("Se esta recibiendo mas trafico de lo permitido en el puerto "+String.valueOf((npt.getNodeId().getLong())));
+							}
+							if (traficoTx>portTxThreshold)
+							{
+								log.warn("Se esta emitiendo mas trafico de lo permitido en el puerto "+String.valueOf((npt.getNodeId().getLong())));
+							}
+							portStats.put(npt, SwitchPortBandwidth.of(npt.getNodeId(), npt.getPortId(),
 									U64.ofRaw(speed),
-									U64.ofRaw(Math.round((rxBytesCounted.getValue() * BITS_PER_BYTE) / timeDifSec)),
-									U64.ofRaw(Math.round((txBytesCounted.getValue() * BITS_PER_BYTE) / timeDifSec)),
+									U64.ofRaw((long) traficoRx),
+									U64.ofRaw((long) traficoTx),
 									pse.getRxBytes(), pse.getTxBytes())
-									);
+							);
 
 						} else { /* initialize */
 							tentativePortStats.put(npt, SwitchPortBandwidth.of(npt.getNodeId(), npt.getPortId(), U64.ZERO, U64.ZERO, U64.ZERO, pse.getRxBytes(), pse.getTxBytes()));
@@ -349,6 +363,23 @@ public class StatisticsCollector implements IFloodlightModule, IStatisticsServic
 			}
 		}
 		log.info("Port statistics collection interval set to {}s", portStatsInterval);
+		if (config.containsKey("portTxThreshold")) {
+			try {
+				portTxThreshold = Long.parseLong(config.get("portTxThreshold").trim());
+			} catch (Exception e) {
+				log.error("Could not parse '{}'. Using default of {}", "portTxThreshold", portTxThreshold);
+			}
+		}
+		log.info("Port statistics collection interval set to {}s", portTxThreshold);
+
+		if (config.containsKey("portRxThreshold")) {
+			try {
+				portRxThreshold = Long.parseLong(config.get("portRxThreshold").trim());
+			} catch (Exception e) {
+				log.error("Could not parse '{}'. Using default of {}", "portRxThreshold", portRxThreshold);
+			}
+		}
+		log.info("Port statistics collection interval set to {}s", portRxThreshold);
 	}
 
 	@Override
